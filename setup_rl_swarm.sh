@@ -3,18 +3,45 @@
 # RL-Swarm Mac 설치 및 최적화 스크립트
 # 설명: Mac 환경에서 RL-Swarm을 설치하고 최적화 설정을 적용합니다.
 
-# 디렉토리 확인 및 생성
-if [ ! -d "$HOME/rl-swarm" ]; then
-  echo "=== RL-Swarm 저장소 클론 중... ==="
-  cd $HOME
-  git clone https://github.com/gensyn-ai/rl-swarm.git
+# 1. 원본 RL-Swarm 저장소 클론
+echo "=== RL-Swarm 저장소 클론 중... ==="
+cd $HOME
+if [ -d "rl-swarm" ]; then
+  echo "기존 rl-swarm 디렉토리 백업 중..."
+  if [ -f "rl-swarm/swarm.pem" ]; then
+    echo "중요: swarm.pem 파일 백업 중..."
+    cp rl-swarm/swarm.pem ~/swarm.pem.backup
+  fi
+  if [ -f "rl-swarm/userData.json" ]; then
+    echo "중요: userData.json 파일 백업 중..."
+    cp rl-swarm/userData.json ~/userData.json.backup
+  fi
+  if [ -f "rl-swarm/userApiKey.json" ]; then
+    echo "중요: userApiKey.json 파일 백업 중..."
+    cp rl-swarm/userApiKey.json ~/userApiKey.json.backup
+  fi
+  mv rl-swarm rl-swarm-backup-$(date +%Y%m%d%H%M%S)
 fi
 
-cd $HOME/rl-swarm
+git clone https://github.com/gensyn-ai/rl-swarm.git
+cd rl-swarm
 
-# 1. 기존 가상환경 정리 및 재생성
+# 백업한 파일 복원
+if [ -f ~/swarm.pem.backup ]; then
+  echo "swarm.pem 파일 복원 중..."
+  cp ~/swarm.pem.backup swarm.pem
+fi
+if [ -f ~/userData.json.backup ]; then
+  echo "userData.json 파일 복원 중..."
+  cp ~/userData.json.backup userData.json
+fi
+if [ -f ~/userApiKey.json.backup ]; then
+  echo "userApiKey.json 파일 복원 중..."
+  cp ~/userApiKey.json.backup userApiKey.json
+fi
+
+# 2. 가상환경 설정
 echo "=== 가상환경 설정 중... ==="
-rm -rf .venv
 python3 -m venv .venv
 source .venv/bin/activate
 
@@ -25,23 +52,23 @@ if [[ "$(which python)" != *".venv"* ]]; then
 fi
 echo "✅ 가상환경이 성공적으로 활성화되었습니다."
 
-# 2. 필요한 패키지 설치
+# 3. 필요한 패키지 설치
 echo "=== 필수 패키지 설치 중... ==="
 pip install --upgrade pip
 pip install hivemind datasets trl peft transformers bitsandbytes accelerate
 pip install torch torchvision torchaudio
 pip install deepspeed psutil
 
-# 3. 패키지 설치 확인
+# 4. 패키지 설치 확인
 echo "=== 패키지 설치 확인 중... ==="
 python3 -c "import hivemind" || { echo "⚠️ Hivemind 패키지 설치 실패. 스크립트를 중단합니다."; exit 1; }
 echo "✅ Hivemind 패키지가 성공적으로 설치되었습니다."
 
-# 4. 메모리 정리
+# 5. 메모리 정리
 echo "=== 시스템 메모리 정리 중... ==="
 sudo purge
 
-# 5. 최적화된 설정 파일 생성
+# 6. 최적화된 설정 파일 생성
 echo "=== 설정 파일 생성 중... ==="
 mkdir -p hivemind_exp/configs/mac
 cat > hivemind_exp/configs/mac/grpo-qwen-2.5-0.5b-optimized.yaml << 'EOFCONFIG'
@@ -118,7 +145,7 @@ save_strategy: "no"
 output_dir: runs/gsm8k/multinode/Qwen-Chat-Gensyn-Swarm
 EOFCONFIG
 
-# 6. 멀티프로세싱 설정
+# 7. 멀티프로세싱 설정
 echo "=== 멀티프로세싱 설정 중... ==="
 python3 -c "
 import multiprocessing as mp
@@ -127,7 +154,7 @@ if __name__ == '__main__':
     print('✅ MultiProcessing 시작 방법을 spawn으로 설정했습니다.')
 "
 
-# 7. Hivemind 타임아웃 값 증가
+# 8. Hivemind 타임아웃 값 증가
 echo "=== Hivemind 타임아웃 값 설정 중... ==="
 python3 -c "
 import os, re
@@ -143,11 +170,10 @@ try:
     print('✅ Hivemind 타임아웃 값을 300초로 성공적으로 수정했습니다.')
 except Exception as e:
     print(f'⚠️ Hivemind 타임아웃 값 수정 실패: {e}')
-    print('스크립트를 중단합니다.')
-    exit(1)
+    print('스크립트를 계속 진행합니다...')
 "
 
-# 8. 환경 변수 설정
+# 9. 환경 변수 설정
 echo "=== 환경 변수 설정 중... ==="
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
 export PYTORCH_ENABLE_MPS_FALLBACK=1
@@ -156,7 +182,7 @@ export BITSANDBYTES_NOWELCOME=1
 export HF_HUB_DOWNLOAD_TIMEOUT=600
 export CONFIG_PATH="hivemind_exp/configs/mac/grpo-qwen-2.5-0.5b-optimized.yaml"
 
-# 9. 실행 권한 설정 및 실행
+# 10. 실행 권한 설정 및 실행
 chmod +x run_rl_swarm.sh
 echo "=== 모든 준비가 완료되었습니다. RL-Swarm 실행 중... ==="
 ./run_rl_swarm.sh
