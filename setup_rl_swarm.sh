@@ -1,5 +1,5 @@
 #!/bin/bash
-# RL-Swarm Mac 완전 자동화 설치 및 최적화 스크립트 v1.0
+# RL-Swarm Mac 완전 자동화 설치 및 최적화 스크립트 v1.1
 # 클론, 설치, 최적화를 한 번에 진행하는 원스톱 솔루션
 
 # 색상 설정
@@ -7,24 +7,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # 유틸리티 함수
-print_header() {
-    echo -e "\n${BLUE}==== $1 ====${NC}"
-}
-
-print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}✗ $1${NC}"
-}
+print_header() { echo -e "\n${BLUE}==== $1 ====${NC}"; }
+print_success() { echo -e "${GREEN}✓ $1${NC}"; }
+print_warning() { echo -e "${YELLOW}⚠ $1${NC}"; }
+print_error() { echo -e "${RED}✗ $1${NC}"; }
 
 # 배너 출력
 cat << "EOF"
@@ -34,14 +23,14 @@ cat << "EOF"
     ██   ██ ██                 ██ ██ ███ ██ ██   ██ ██   ██ ██  ██  ██
     ██   ██ ███████       ███████  ███ ███  ██   ██ ██   ██ ██      ██
 
-    Mac 원스톱 설치 및 최적화 도구 v1.0
+    Mac 원스톱 설치 및 최적화 도구 v1.1
 EOF
 echo ""
 
+# 실행 환경 체크
 print_header "시스템 요구사항 확인"
-# Python 3.10 이상 확인
 python_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "0.0")
-if (( $(echo "$python_version < 3.10" | bc -l) )); then
+if (( $(echo "$python_version < 3.10" | bc -l 2>/dev/null) )); then
     print_error "Python 3.10 이상이 필요합니다. 현재 버전: $python_version"
     print_warning "Python을 업그레이드한 후 다시 시도하세요."
     exit 1
@@ -51,7 +40,7 @@ fi
 
 # 필수 패키지 확인
 print_header "필수 패키지 확인"
-for cmd in git curl python3 pip3; do
+for cmd in git curl python3; do
     if ! command -v $cmd &> /dev/null; then
         print_error "$cmd 명령을 찾을 수 없습니다. 설치 후 다시 시도하세요."
         exit 1
@@ -61,10 +50,9 @@ done
 
 # 하드웨어 확인
 print_header "Mac 하드웨어 확인"
-mac_model=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || system_profiler SPHardwareDataType | grep "Model Name" | awk -F': ' '{print $2}')
-mac_chip=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || system_profiler SPHardwareDataType | grep "Chip" | awk -F': ' '{print $2}')
-total_memory=$(sysctl -n hw.memsize 2>/dev/null || system_profiler SPHardwareDataType | grep "Memory" | awk -F': ' '{print $2}')
-total_memory_gb=$(($(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1024 / 1024 / 1024))
+mac_model=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Model Name" | awk -F': ' '{print $2}' || echo "Unknown")
+mac_chip=$(system_profiler SPHardwareDataType 2>/dev/null | grep "Chip" | awk -F': ' '{print $2}' || echo "Unknown")
+total_memory_gb=$(($(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1024 / 1024 / 1024 || echo "Unknown"))
 
 echo "모델: $mac_model"
 echo "칩: $mac_chip"
@@ -96,34 +84,12 @@ else
 fi
 
 # RL-Swarm 리포지토리 클론
-print_header "RL-Swarm 리포지토리 클론"
+print_header "RL-Swarm 리포지토리 확인"
 cd $HOME
 if [ -d "rl-swarm" ]; then
     print_warning "기존 rl-swarm 디렉토리가 존재합니다."
-    read -p "기존 디렉토리를 백업하고 새로 클론하시겠습니까? (y/N): " clone_choice
-    if [[ "$clone_choice" =~ ^[Yy]$ ]]; then
-        echo "기존 rl-swarm 디렉토리 백업 중..."
-        # 중요 파일 백업
-        for file in swarm.pem userData.json userApiKey.json; do
-            if [ -f "rl-swarm/$file" ]; then
-                echo "중요: $file 파일 백업 중..."
-                cp "rl-swarm/$file" ~/"$file.backup"
-            fi
-        done
-        mv rl-swarm "rl-swarm-backup-$(date +%Y%m%d%H%M%S)"
-        git clone https://github.com/gensyn-ai/rl-swarm.git
-        print_success "RL-Swarm 리포지토리 클론 완료"
-        
-        # 백업 파일 복원
-        for file in swarm.pem userData.json userApiKey.json; do
-            if [ -f ~/"$file.backup" ]; then
-                echo "$file 파일 복원 중..."
-                cp ~/"$file.backup" "rl-swarm/$file"
-            fi
-        done
-    else
-        print_success "기존 rl-swarm 디렉토리를 사용합니다."
-    fi
+    echo "기존 디렉토리를 사용합니다."
+    print_success "기존 rl-swarm 디렉토리를 사용합니다."
 else
     git clone https://github.com/gensyn-ai/rl-swarm.git
     print_success "RL-Swarm 리포지토리 클론 완료"
@@ -136,14 +102,8 @@ cd ~/rl-swarm || { print_error "rl-swarm 디렉토리를 찾을 수 없습니다
 print_header "가상환경 설정"
 if [ -d ".venv" ]; then
     print_warning "기존 가상환경이 존재합니다."
-    read -p "가상환경을 재생성하시겠습니까? (y/N): " venv_choice
-    if [[ "$venv_choice" =~ ^[Yy]$ ]]; then
-        rm -rf .venv
-        python3 -m venv .venv
-        print_success "가상환경이 재생성되었습니다."
-    else
-        print_success "기존 가상환경을 사용합니다."
-    fi
+    echo "기존 가상환경을 사용합니다."
+    print_success "기존 가상환경을 사용합니다."
 else
     python3 -m venv .venv
     print_success "가상환경이 생성되었습니다."
@@ -165,7 +125,11 @@ if [ "$is_m_series" = true ]; then
     pip install deepspeed psutil
 else
     # 일반 패키지 설치
-    pip install -r requirements-cpu.txt
+    if [ -f "requirements-cpu.txt" ]; then
+        pip install -r requirements-cpu.txt
+    else
+        pip install hivemind datasets trl peft transformers
+    fi
 fi
 
 # 패키지 설치 확인
@@ -175,7 +139,7 @@ print_success "Hivemind 패키지가 성공적으로 설치되었습니다."
 
 # 메모리 정리
 print_header "시스템 메모리 정리"
-sudo purge
+sudo purge 2>/dev/null || print_warning "메모리 정리 실패, 계속 진행합니다..."
 
 # Mac 최적화 설정 디렉토리 생성
 print_header "Mac 최적화 설정 생성"
@@ -275,6 +239,7 @@ try:
         print('✓ Hivemind 타임아웃 값을 300초로 수정했습니다.')
 except Exception as e:
     print(f'⚠ Hivemind 타임아웃 값 수정 실패: {e}')
+    print('스크립트를 계속 진행합니다...')
 " || print_warning "Hivemind 타임아웃 값 설정 실패"
 
 # MPS 백엔드 최적화
@@ -442,8 +407,8 @@ if [ -f "run_rl_swarm.sh" ]; then
     # 백업 생성
     cp run_rl_swarm.sh run_rl_swarm.sh.backup
     
-    # 프로세스 종료 부분을 안전하게 수정
-    sed -i '' 's/kill -9 $PID/if [ -n "$PID" ] \&\& ps -p $PID > \/dev\/null 2>\&1; then kill -9 $PID; fi/g' run_rl_swarm.sh 2>/dev/null || {
+    # 프로세스 종료 부분을 안전하게 수정 (macOS 호환 방식으로)
+    sed -i.bak 's/kill -9 \$PID/if [ -n "\$PID" ] \&\& ps -p \$PID \&> \/dev\/null; then kill -9 \$PID; fi/g' run_rl_swarm.sh 2>/dev/null || {
         print_warning "자동 수정에 실패했습니다. 수동 수정이 필요할 수 있습니다."
     }
     
@@ -458,7 +423,7 @@ echo "다음 명령으로 RL-Swarm을 최적화된 설정으로 실행할 수 �
 echo "  cd ~/rl-swarm && ./run_optimized.sh"
 echo ""
 echo "RL-Swarm을 지금 실행하시겠습니까? [Y/n]"
-read -r run_choice
+read -p "" run_choice
 
 if [[ ! "$run_choice" =~ ^[Nn]$ ]]; then
     print_header "RL-Swarm 실행 중..."
