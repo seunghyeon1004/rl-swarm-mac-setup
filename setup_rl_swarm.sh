@@ -173,7 +173,18 @@ except Exception as e:
     print('스크립트를 계속 진행합니다...')
 "
 
-# 9. 환경 변수 설정
+# 9. run_rl_swarm.sh 스크립트 수정
+echo "=== run_rl_swarm.sh 스크립트 수정 중... ==="
+# 백업 생성
+cp run_rl_swarm.sh run_rl_swarm.sh.backup
+
+# 프로세스 종료 부분 수정
+sed -i '' 's/kill -9 $PID/if [ -n "$PID" ] \&\& ps -p $PID > \/dev\/null; then kill -9 $PID; fi/g' run_rl_swarm.sh || {
+  echo "⚠️ run_rl_swarm.sh 수정 실패. 원본 파일이 다른 형식일 수 있습니다."
+  echo "수동으로 확인해 주세요."
+}
+
+# 10. 환경 변수 설정
 echo "=== 환경 변수 설정 중... ==="
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
 export PYTORCH_ENABLE_MPS_FALLBACK=1
@@ -181,8 +192,12 @@ export TOKENIZERS_PARALLELISM=false
 export BITSANDBYTES_NOWELCOME=1
 export HF_HUB_DOWNLOAD_TIMEOUT=600
 export CONFIG_PATH="hivemind_exp/configs/mac/grpo-qwen-2.5-0.5b-optimized.yaml"
+# Mac M 시리즈 추가 최적화
+export PYTORCH_METAL_GPU_SESSION="1" 
+export PYTORCH_MPS_MAX_ALLOC_SIZE=4294967296
 
-# 10. 실행 권한 설정 및 실행
+# 11. 실행 권한 설정 및 안전한 실행
 chmod +x run_rl_swarm.sh
 echo "=== 모든 준비가 완료되었습니다. RL-Swarm 실행 중... ==="
-./run_rl_swarm.sh
+# 서브셸에서 실행하여 환경 변수와 가상환경 유지
+bash -c "cd $(pwd) && source .venv/bin/activate && ./run_rl_swarm.sh"
