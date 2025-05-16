@@ -1,75 +1,99 @@
 #!/bin/bash
 
 # RL-Swarm Mac 설치 및 최적화 스크립트
-# 설명: Mac 환경에서 RL-Swarm을 설치하고 최적화 설정을 적용합니다.
+# GitHub에서 바로 실행 가능: curl -s https://raw.githubusercontent.com/seunghyeon1004/rl-swarm-mac-setup/main/setup_rl_swarm.sh | bash
 
 # 오류 발생 시 스크립트 중단
 set -e
+
+# 컬러 출력 설정
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# 성공 메시지 함수
+success() {
+  echo -e "${GREEN}✅ $1${NC}"
+}
+
+# 경고 메시지 함수
+warn() {
+  echo -e "${YELLOW}⚠️ $1${NC}"
+}
+
+# 오류 메시지 함수
+error() {
+  echo -e "${RED}❌ $1${NC}"
+  exit 1
+}
+
+echo "
+    ██████  ██            ███████ ██     ██  █████  ██████  ███    ███
+    ██   ██ ██            ██      ██     ██ ██   ██ ██   ██ ████  ████
+    ██████  ██      █████ ███████ ██  █  ██ ███████ ██████  ██ ████ ██
+    ██   ██ ██                 ██ ██ ███ ██ ██   ██ ██   ██ ██  ██  ██
+    ██   ██ ███████       ███████  ███ ███  ██   ██ ██   ██ ██      ██
+
+    Mac용 RL-Swarm 설치 도구
+"
 
 # 1. 원본 RL-Swarm 저장소 클론
 echo "=== RL-Swarm 저장소 클론 중... ==="
 cd $HOME
 if [ -d "rl-swarm" ]; then
   echo "기존 rl-swarm 디렉토리 백업 중..."
-  if [ -f "rl-swarm/swarm.pem" ]; then
-    echo "중요: swarm.pem 파일 백업 중..."
-    cp rl-swarm/swarm.pem ~/swarm.pem.backup
-  fi
-  if [ -f "rl-swarm/userData.json" ]; then
-    echo "중요: userData.json 파일 백업 중..."
-    cp rl-swarm/userData.json ~/userData.json.backup
-  fi
-  if [ -f "rl-swarm/userApiKey.json" ]; then
-    echo "중요: userApiKey.json 파일 백업 중..."
-    cp rl-swarm/userApiKey.json ~/userApiKey.json.backup
-  fi
-  mv rl-swarm rl-swarm-backup-$(date +%Y%m%d%H%M%S)
+  
+  # 중요 파일 백업
+  for file in swarm.pem userData.json userApiKey.json; do
+    if [ -f "rl-swarm/$file" ]; then
+      echo "중요: $file 파일 백업 중..."
+      cp "rl-swarm/$file" ~/"$file.backup"
+    fi
+  done
+  
+  # 기존 디렉토리 이름 변경
+  mv rl-swarm "rl-swarm-backup-$(date +%Y%m%d%H%M%S)"
 fi
 
-git clone https://github.com/gensyn-ai/rl-swarm.git
-cd rl-swarm
+# 저장소 클론
+git clone https://github.com/gensyn-ai/rl-swarm.git || error "RL-Swarm 저장소 클론 실패"
+cd rl-swarm || error "rl-swarm 디렉토리로 이동 실패"
 
-# 백업한 파일 복원
-if [ -f ~/swarm.pem.backup ]; then
-  echo "swarm.pem 파일 복원 중..."
-  cp ~/swarm.pem.backup swarm.pem
-fi
-if [ -f ~/userData.json.backup ]; then
-  echo "userData.json 파일 복원 중..."
-  cp ~/userData.json.backup userData.json
-fi
-if [ -f ~/userApiKey.json.backup ]; then
-  echo "userApiKey.json 파일 복원 중..."
-  cp ~/userApiKey.json.backup userApiKey.json
-fi
+# 백업 파일 복원
+for file in swarm.pem userData.json userApiKey.json; do
+  if [ -f ~/"$file.backup" ]; then
+    echo "$file 파일 복원 중..."
+    cp ~/"$file.backup" "$file"
+  fi
+done
 
 # 2. 가상환경 설정
 echo "=== 가상환경 설정 중... ==="
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv || error "가상환경 생성 실패"
+source .venv/bin/activate || error "가상환경 활성화 실패"
 
 # 가상환경 활성화 검증
 if [[ "$(which python)" != *".venv"* ]]; then
-  echo "⚠️ 가상환경이 활성화되지 않았습니다. 수동으로 'source .venv/bin/activate' 실행 후 다시 시도하세요."
-  exit 1
+  error "가상환경이 활성화되지 않았습니다. 수동으로 'source .venv/bin/activate' 실행 후 다시 시도하세요."
 fi
-echo "✅ 가상환경이 성공적으로 활성화되었습니다."
+success "가상환경이 성공적으로 활성화되었습니다."
 
 # 3. 필요한 패키지 설치
 echo "=== 필수 패키지 설치 중... ==="
-pip install --upgrade pip
-pip install hivemind datasets trl peft transformers bitsandbytes accelerate
-pip install torch torchvision torchaudio
-pip install deepspeed psutil
+pip install --upgrade pip || warn "pip 업그레이드 실패, 계속 진행합니다..."
+pip install hivemind datasets trl peft transformers bitsandbytes accelerate || error "기본 패키지 설치 실패"
+pip install torch torchvision torchaudio || warn "PyTorch 패키지 설치 실패, 계속 진행합니다..."
+pip install deepspeed psutil || warn "추가 패키지 설치 실패, 계속 진행합니다..."
 
 # 4. 패키지 설치 확인
 echo "=== 패키지 설치 확인 중... ==="
-python3 -c "import hivemind" || { echo "⚠️ Hivemind 패키지 설치 실패. 스크립트를 중단합니다."; exit 1; }
-echo "✅ Hivemind 패키지가 성공적으로 설치되었습니다."
+python3 -c "import hivemind" || error "Hivemind 패키지 설치 실패. 스크립트를 중단합니다."
+success "Hivemind 패키지가 성공적으로 설치되었습니다."
 
 # 5. 메모리 정리
 echo "=== 시스템 메모리 정리 중... ==="
-sudo purge
+sudo purge || warn "메모리 정리 실패, 계속 진행합니다..."
 
 # 6. 최적화된 설정 파일 생성
 echo "=== 설정 파일 생성 중... ==="
@@ -155,7 +179,7 @@ import multiprocessing as mp
 if __name__ == '__main__':
     mp.set_start_method('spawn')
     print('✅ MultiProcessing 시작 방법을 spawn으로 설정했습니다.')
-"
+" || warn "멀티프로세싱 설정 실패, 계속 진행합니다..."
 
 # 8. Hivemind 타임아웃 값 증가
 echo "=== Hivemind 타임아웃 값 설정 중... ==="
@@ -174,22 +198,36 @@ try:
 except Exception as e:
     print(f'⚠️ Hivemind 타임아웃 값 수정 실패: {e}')
     print('스크립트를 계속 진행합니다...')
-"
+" || warn "Hivemind 타임아웃 설정 실패, 계속 진행합니다..."
 
-# 9. run_rl_swarm.sh 스크립트 수정 (프로세스 종료 오류 해결)
-echo "=== run_rl_swarm.sh 스크립트 수정 중... ==="
-# 백업 생성
-cp run_rl_swarm.sh run_rl_swarm.sh.backup
+# 9. 래퍼 스크립트 생성 (run_rl_swarm.sh 실행 시 오류 무시)
+echo "=== RL-Swarm 실행 래퍼 스크립트 생성 중... ==="
+cat > run_wrapper.sh << 'EOFWRAPPER'
+#!/bin/bash
+# RL-Swarm 실행 래퍼 스크립트 - 오류 메시지 처리
+cd "$HOME/rl-swarm"
+source .venv/bin/activate
 
-# run_rl_swarm.sh 내용 확인 및 수정
-if grep -q "kill.*\$PID" run_rl_swarm.sh; then
-  # 프로세스 종료 코드 수정 (macOS 호환 방식으로)
-  sed -i '' 's/kill.*\$PID/if [ -n "$PID" ] \&\& ps -p $PID \&> \/dev\/null; then kill $PID 2> \/dev\/null || true; fi/g' run_rl_swarm.sh
-  echo "✅ run_rl_swarm.sh 스크립트 수정 완료"
-else
-  echo "⚠️ run_rl_swarm.sh에서 프로세스 종료 코드를 찾을 수 없습니다."
-  echo "프로세스 종료 오류가 발생할 수 있지만, 계속 진행합니다."
-fi
+# 환경 변수 설정
+export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+export TOKENIZERS_PARALLELISM=false
+export BITSANDBYTES_NOWELCOME=1
+export HF_HUB_DOWNLOAD_TIMEOUT=600
+export CONFIG_PATH="hivemind_exp/configs/mac/grpo-qwen-2.5-0.5b-optimized.yaml"
+export PYTORCH_METAL_GPU_SESSION="1" 
+export PYTORCH_MPS_MAX_ALLOC_SIZE=4294967296
+
+echo "RL-Swarm 실행 중... (오류 메시지는 무시됩니다)"
+# 2>&1 출력을 파이프로 전달하여 오류 메시지 필터링
+./run_rl_swarm.sh 2>&1 | grep -v "kill: (-[0-9]*) - No such process"
+
+# 항상 성공 코드 반환
+exit 0
+EOFWRAPPER
+
+chmod +x run_wrapper.sh
+success "RL-Swarm 래퍼 스크립트 생성 완료"
 
 # 10. 환경 변수 설정
 echo "=== 환경 변수 설정 중... ==="
@@ -199,23 +237,38 @@ export TOKENIZERS_PARALLELISM=false
 export BITSANDBYTES_NOWELCOME=1
 export HF_HUB_DOWNLOAD_TIMEOUT=600
 export CONFIG_PATH="hivemind_exp/configs/mac/grpo-qwen-2.5-0.5b-optimized.yaml"
-# Mac M 시리즈 추가 최적화
 export PYTORCH_METAL_GPU_SESSION="1" 
 export PYTORCH_MPS_MAX_ALLOC_SIZE=4294967296
 
-# 11. 실행 권한 설정 및 디렉토리 확인
-chmod +x run_rl_swarm.sh
-echo "=== 현재 디렉토리 확인: $(pwd) ==="
+# 11. 실행 권한 설정
+chmod +x run_rl_swarm.sh || warn "실행 권한 설정 실패, 계속 진행합니다..."
 
-# 12. RL-Swarm 실행
-echo "=== 모든 준비가 완료되었습니다. RL-Swarm 실행 중... ==="
-# 안전한 실행 환경 보장
-(
-  cd "$HOME/rl-swarm"
-  source .venv/bin/activate
-  echo "✅ 가상환경 활성화: $(which python)"
-  echo "✅ 실행 디렉토리: $(pwd)"
-  ./run_rl_swarm.sh
-)
+# 12. 사용법 안내
+echo "
+=== RL-Swarm 설치가 완료되었습니다 ===
 
-echo "=== RL-Swarm 설치 및 실행 프로세스가 완료되었습니다 ==="
+RL-Swarm 실행 방법:
+
+1. 래퍼 스크립트 사용 (오류 메시지 없이 실행):
+   cd ~/rl-swarm
+   ./run_wrapper.sh
+
+2. 직접 실행 (오류 메시지 발생 가능):
+   cd ~/rl-swarm
+   source .venv/bin/activate
+   ./run_rl_swarm.sh
+
+RL-Swarm을 지금 실행하시겠습니까? (y/n): "
+
+read -r answer
+if [[ "$answer" =~ ^[Yy]$ ]]; then
+  echo "=== RL-Swarm 실행 중... ==="
+  # 서브셸에서 실행하여 환경 변수와 가상환경 유지
+  (cd "$HOME/rl-swarm" && ./run_wrapper.sh)
+  success "RL-Swarm 실행이 완료되었습니다."
+else
+  echo "RL-Swarm을 나중에 실행하려면 다음 명령어를 사용하세요:"
+  echo "cd ~/rl-swarm && ./run_wrapper.sh"
+fi
+
+echo "감사합니다! RL-Swarm 설치 도구를 이용해 주셔서 감사합니다."
