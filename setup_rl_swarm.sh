@@ -3,6 +3,9 @@
 # RL-Swarm Mac 설치 및 최적화 스크립트
 # 설명: Mac 환경에서 RL-Swarm을 설치하고 최적화 설정을 적용합니다.
 
+# 오류 발생 시 스크립트 중단
+set -e
+
 # 1. 원본 RL-Swarm 저장소 클론
 echo "=== RL-Swarm 저장소 클론 중... ==="
 cd $HOME
@@ -173,16 +176,20 @@ except Exception as e:
     print('스크립트를 계속 진행합니다...')
 "
 
-# 9. run_rl_swarm.sh 스크립트 수정
+# 9. run_rl_swarm.sh 스크립트 수정 (프로세스 종료 오류 해결)
 echo "=== run_rl_swarm.sh 스크립트 수정 중... ==="
 # 백업 생성
 cp run_rl_swarm.sh run_rl_swarm.sh.backup
 
-# 프로세스 종료 부분 수정
-sed -i '' 's/kill -9 $PID/if [ -n "$PID" ] \&\& ps -p $PID > \/dev\/null; then kill -9 $PID; fi/g' run_rl_swarm.sh || {
-  echo "⚠️ run_rl_swarm.sh 수정 실패. 원본 파일이 다른 형식일 수 있습니다."
-  echo "수동으로 확인해 주세요."
-}
+# run_rl_swarm.sh 내용 확인 및 수정
+if grep -q "kill.*\$PID" run_rl_swarm.sh; then
+  # 프로세스 종료 코드 수정 (macOS 호환 방식으로)
+  sed -i '' 's/kill.*\$PID/if [ -n "$PID" ] \&\& ps -p $PID \&> \/dev\/null; then kill $PID 2> \/dev\/null || true; fi/g' run_rl_swarm.sh
+  echo "✅ run_rl_swarm.sh 스크립트 수정 완료"
+else
+  echo "⚠️ run_rl_swarm.sh에서 프로세스 종료 코드를 찾을 수 없습니다."
+  echo "프로세스 종료 오류가 발생할 수 있지만, 계속 진행합니다."
+fi
 
 # 10. 환경 변수 설정
 echo "=== 환경 변수 설정 중... ==="
@@ -196,8 +203,19 @@ export CONFIG_PATH="hivemind_exp/configs/mac/grpo-qwen-2.5-0.5b-optimized.yaml"
 export PYTORCH_METAL_GPU_SESSION="1" 
 export PYTORCH_MPS_MAX_ALLOC_SIZE=4294967296
 
-# 11. 실행 권한 설정 및 안전한 실행
+# 11. 실행 권한 설정 및 디렉토리 확인
 chmod +x run_rl_swarm.sh
+echo "=== 현재 디렉토리 확인: $(pwd) ==="
+
+# 12. RL-Swarm 실행
 echo "=== 모든 준비가 완료되었습니다. RL-Swarm 실행 중... ==="
-# 서브셸에서 실행하여 환경 변수와 가상환경 유지
-bash -c "cd $(pwd) && source .venv/bin/activate && ./run_rl_swarm.sh"
+# 안전한 실행 환경 보장
+(
+  cd "$HOME/rl-swarm"
+  source .venv/bin/activate
+  echo "✅ 가상환경 활성화: $(which python)"
+  echo "✅ 실행 디렉토리: $(pwd)"
+  ./run_rl_swarm.sh
+)
+
+echo "=== RL-Swarm 설치 및 실행 프로세스가 완료되었습니다 ==="
